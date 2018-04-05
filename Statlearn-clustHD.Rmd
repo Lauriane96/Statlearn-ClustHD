@@ -1,0 +1,246 @@
+---
+title: "Statlearn 2018: Tutorial on HD clustering"
+output: 
+  html_notebook: 
+    number_sections: yes
+author: Charles Bouveyron - Université Côte d'Azur & Inria
+---
+
+```{r include=FALSE}
+myPalette <- c("#377EB8","#4DAF4A","#984EA3","#FF7F00","#FFFF33","#A65628","#F781BF")
+palette(myPalette); par(pch=19)
+```
+
+All code and data sets used in this tutorial are avalaible [https://github.com/cbouveyron/Statlearn-ClustHD](https://github.com/cbouveyron/Statlearn-ClustHD). The required libraries are: *mvtnorm*, *Rmixmod*, *mclust*, *HDclassif* and *FisherEM*. They can be installed using the `install.packages()` command.
+
+# - Curse and blesssing of dimensionality
+
+## - The volume of the unit hyper-sphere
+
+Let's look at the bahavior of the volume of the unit hyper-sphere according to the space dimensionality. Let's recall that the formulae of the volume of the unit hypers-sphere is 
+$$ V_S(p) = \frac{\pi^{p/2}}{\Gamma(p/2+1)}$$
+
+```{r}
+p = 1:100
+plot(p,pi^(p/2)/gamma(p/2+1),type='b',col=1)
+title(main="Volume of unit hyper-sphere")
+```
+
+## - The volume of the unit hyper-sphere
+
+Another interesting thing in high-dimensional spaces is the empty-space phenomenum. It can be observed by loonking at the 0.9-radius shell. This may in particular be useful for classification and clustering purposes.
+
+```{r}
+plot(p,1-0.9^p,type='b',col=1)
+title(main="P(X in C_0.9)")
+```
+
+## - Bayes classifier vs EDDA
+
+Warning: may take a while!
+```{r}
+library(mvtnorm); library(MASS); library(Rmixmod)
+BayesClass <- function(X,tau,m,S){
+  G = length(m); d = ncol(X)
+  P = matrix(NA,nrow(X),G)
+  for (g in 1:G) P[,g] = tau[g] * dmvnorm(X,m[[g]],S[[g]])
+  P = P / rowSums(P) %*% matrix(1,1,G)
+  list(P = P, cls = max.col(P))
+}
+
+n = 120; nbrep = 5
+dims = seq(10,210,20)
+err = err2 = err3 = matrix(NA,length(dims),nbrep)
+for (i in 1:length(dims)){
+  cat('.')
+  for (j in 1:nbrep){
+    # Simulation
+    d = dims[i]
+    m1 = c(0,0,rep(0,d-2)); m2 = c(0,-2,rep(0,d-2)); m3 = c(2,0,rep(0,d-2));
+    S1 = diag(d); S2 = 0.8 * diag(d); S3 = 0.9 * diag(d)
+    X = as.data.frame(rbind(mvrnorm(n/3,m1,S1),mvrnorm(n/3,m2,S2),mvrnorm(n/3,m3,S3)))
+    X2 = as.data.frame(rbind(mvrnorm(10*n/3,m1,S1),mvrnorm(10*n/3,m2,S2),mvrnorm(10*n/3,m3,S3)))
+    cls = rep(1:3,rep(n/3,3))  
+    cls2 = rep(1:3,rep(10*n/3,3))
+    # Classification with the Bayes' classifier
+    pred = BayesClass(X2,rep(1/3,3),list(m1,m2,m3),list(S1,S2,S3))
+    # Classification with EDDA
+    mod = mixmodLearn(X,cls,models=mixmodGaussianModel(listModels = 'Gaussian_pk_Lk_I'))
+    res = mixmodPredict(X2,mod["bestResult"])@partition
+    # Computing error rate
+    err[i,j] = sum(pred$cls != cls2) / length(cls2)
+    err2[i,j] = sum(res != cls2) / length(cls2)
+  }
+}
+cat('\n')
+boxplot(t(err),ylim=c(0.1,0.33),names=dims,xlab='Dimension',ylab='Classification error rate',col=3)
+boxplot(t(err2),names=dims,xlab='Dimension',ylab='Classification error rate',col=4,add=TRUE)
+legend("bottomleft",legend = c('Bayes classifier','EDDA'),col=c(3,4),lty=1,pch=19)
+```
+
+
+# - Earlier work
+
+## - Principal component analysis
+
+Let's first look at some real high-dimensional data: the NIR chemometric data (Ruckebusch et al.).
+
+```{r}
+load('data/NIR_data.Rdata')
+matplot(t(Y),col=1,type='l',xlab='Wavelengths',ylab='Intensity')
+```
+
+In these data, we would like to recover tree different groups of curves. Notice that the actual labels are in the `cls` vector.
+
+```{r}
+matplot(t(Y),col=cls,type='l',lty=(3:1)[cls],xlab='Wavelengths',ylab='Intensity')
+```
+
+Let's do now a PCA on it and try to figure out which principal axes are the most discriminant.
+
+```{r}
+# TO DO!!!
+```
+
+## - Mclust on original and PCA axes
+
+Let's now try to cluster HD data with Mclust (as seen in Julien's tutorial). To this end, we'll work with the Wine data set (but in its 27-dimensional version!).
+
+```{r}
+load('data/Wine27.Rdata')
+library(mclust)
+# TO DO!!!
+# out = ?????
+table(out$classification,cls)
+adjustedRandIndex(out$classification,cls)
+```
+
+A triaditional way to avoid the curse of dimensionality is to cluster the projected data on the first principal axes.
+
+```{r}
+# TO DO!!!
+```
+
+
+# - Subspace clustering methods
+
+## - A first look at HDDC
+
+Let's now move to subspace clustering methods, and in particular *HDDC* which is implemented in the *HDclassif* package. We still use the *wine* data set for illustration.
+
+```{r}
+library(HDclassif)
+out = hddc(X,3)
+table(out$class,cls)
+adjustedRandIndex(out$class,cls)
+```
+
+We can also have a look at the data clustering in the PCA plan.
+
+```{r}
+plot(predict(princomp(X)),col=out$class,pch=19)
+```
+
+Let's take some time to look at the estimation of the different model parameters. Use the help page to see how to access this information.
+
+```{r}
+?hddc
+out$prop
+out$d
+out$a
+out$b
+
+out$BIC
+```
+
+## - Model selection in HDDC
+
+Model selection in *HDDC* concerns both the choice of the submodels and the intrinsic dimension estimation. Let's start with the choice of submodels. 
+
+```{r}
+out = hddc(X,3,model = 'all')
+table(out$class,cls)
+adjustedRandIndex(out$class,cls)
+```
+
+The choice of the intrisic dimensionalities is done through the Cattell' scree test. The Cattell's threshold is a value between 1 and 0 (lower values yield larger dimensionalities).
+```{r}
+out = hddc(X,3,threshold = c(0.2,0.15,0.1,0.05,0.01))
+table(out$class,cls)
+adjustedRandIndex(out$class,cls)
+```
+
+## - Clustering of "real" HD data
+
+We consider now the *USPS358* data set which are hadwritten digits represented as 256-dimensional vectors. The *USPS358* data set is a subset of the original *USPS* data set where only the digits 3, 5 and 8 have been kept.
+
+```{r}
+load('data/USPS358.Rdata')
+
+plotIm <- function(x){image(t(matrix(t(x),ncol=16,byrow=TRUE)[16:1,]),col=gray(255:0/255),axes=F); box()}
+
+par(mfrow=c(2,5))
+sel = sample(nrow(X),10)
+for (i in 1:10) plotIm(X[sel[i],])
+```
+
+You can try clustering those data with *Mclust*...
+
+```{r}
+# TO DO!!!
+```
+
+
+... and with *HDDC*.
+
+```{r}
+# TO DO!!!
+```
+
+We can also try to improve the clustering by looking at submodels and playing with the group intrinsic dimensionalities.
+
+```{r}
+# TO DO!!!
+```
+
+# - Discriminative and sparse clustering
+
+## - The Fisher-EM algorithm for dscriminative clustering
+
+We now consider the discriminative clustering method *Fisher-EM*, which is implemendted in the *FisherEM* package. First, let's come back to a simpler HD data set: the *wine27* set.
+
+```{r}
+load('data/Wine27.Rdata')
+library(FisherEM)
+out = fem(X,3)
+table(out$cls,cls)
+adjustedRandIndex(out$cls,cls)
+```
+
+
+## - The sparse Fisher-EM algorithm: clustering and variable selection
+
+The package can also perform variable selection while clustering data. The `sfem` function implements the sparse version of Fisher-EM.
+
+```{r}
+?sfem
+
+# TO DO!!!
+# out = sfem(?????)
+
+table(out$cls,cls)
+adjustedRandIndex(out$cls,cls)
+plot(out)
+
+class(out$U) = "loadings"
+out$U
+```
+
+
+
+
+
+
+
+
+
