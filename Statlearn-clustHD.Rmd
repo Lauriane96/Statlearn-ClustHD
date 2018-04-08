@@ -99,7 +99,11 @@ matplot(t(Y),col=cls,type='l',lty=(3:1)[cls],xlab='Wavelengths',ylab='Intensity'
 Let's do now a PCA on it and try to figure out which principal axes are the most discriminant.
 
 ```{r}
-# TO DO!!!
+# PCA on the NIR data !!!! TO DO !!!
+library(MASS)
+U = svd(Y)$v
+Yp = as.matrix(Y) %*% U
+pairs(Yp[,1:4],col=cls,pch=(15:17)[cls],cex=1.25,labels=c('PC 1','PC 2','PC 3','PC4'))
 ```
 
 ## - Mclust on original and PCA axes
@@ -108,9 +112,9 @@ Let's now try to cluster HD data with Mclust (as seen in Julien's tutorial). To 
 
 ```{r}
 load('data/Wine27.Rdata')
+# TO DO!
 library(mclust)
-# TO DO!!!
-# out = ?????
+out = Mclust(X,G=3,verbose = FALSE)
 table(out$classification,cls)
 adjustedRandIndex(out$classification,cls)
 ```
@@ -118,7 +122,11 @@ adjustedRandIndex(out$classification,cls)
 A triaditional way to avoid the curse of dimensionality is to cluster the projected data on the first principal axes.
 
 ```{r}
-# TO DO!!!
+# TO DO!
+Xp = predict(princomp(X))[,1:2]
+out = Mclust(Xp,G=3,verbose = FALSE)
+table(out$classification,cls)
+adjustedRandIndex(out$classification,cls)
 ```
 
 
@@ -187,20 +195,36 @@ for (i in 1:10) plotIm(X[sel[i],])
 You can try clustering those data with *Mclust*...
 
 ```{r}
-# TO DO!!!
+# TO DO!
+out = Mclust(X,3,initialization=list(subset=sample(nrow(X),300)),verbose = FALSE)
+table(out$classification,cls)
+adjustedRandIndex(out$classification,cls)
 ```
 
 
 ... and with *HDDC*.
 
 ```{r}
-# TO DO!!!
+out = hddc(X,3)
+table(out$class,cls)
+adjustedRandIndex(out$class,cls)
 ```
+
+We can look at the means that are estimated.
+
+```{r}
+par(mfrow=c(1,3))
+for (k in 1:3) plotIm(out$mu[k,])
+```
+
 
 We can also try to improve the clustering by looking at submodels and playing with the group intrinsic dimensionalities.
 
 ```{r}
-# TO DO!!!
+# TO DO!
+out = hddc(X,3,model='all',threshold = c(0.2,0.15,0.1,0.05,0.01),mc.cores = 4)
+table(out$class,cls)
+adjustedRandIndex(out$class,cls)
 ```
 
 # - Discriminative and sparse clustering
@@ -223,11 +247,7 @@ adjustedRandIndex(out$cls,cls)
 The package can also perform variable selection while clustering data. The `sfem` function implements the sparse version of Fisher-EM.
 
 ```{r}
-?sfem
-
-# TO DO!!!
-# out = sfem(?????)
-
+out = sfem(X,3,l1 = 0.3,model='all')
 table(out$cls,cls)
 adjustedRandIndex(out$cls,cls)
 plot(out)
